@@ -1,21 +1,17 @@
 /** @flow */
 
-import lru from 'redis-lru'
-
-type Cache<T> = {
-  set: (key: string, value: T) => Promise<void>,
-  get: (key: string) => Promise<T>,
-  del: (key: string) => Promise<void>,
-  reset: () => Promise<void>,
-}
+import Redis from 'ioredis'
+import * as Promise from 'bluebird'
 
 type CreateCacheInput<T> = {
-  redis: any,
+  port: number,
+  host: string,
   getKey: (...args: Array<any>) => string,
   getValue: (...args: Array<any>) => T,
   namespace: string,
   enable: boolean,
-  max: number,
+  ttl: number,
+  autoExtend: boolean,
 }
 
 type CreateCacheOutput<T> = {
@@ -25,26 +21,33 @@ type CreateCacheOutput<T> = {
 }
 
 function createCache<T>({
-  redis,
+  port,
+  host,
   getValue,
-  getKey,
+  getKey: getKeyHelper,
   namespace,
   enable,
-  max,
+  ttl,
+  autoExtend,
 }: CreateCacheInput<T>): CreateCacheOutput<T> {
-  const cache: Cache<T> = lru(redis, { namespace, max })
+  const redis = new Redis(port, host)
+  const getKey = (...args) => `cache:${namespace}:${getKeyHelper(...args)}`
 
   const get = async (...args) => {
     if (!enable) {
       return getValue(...args)
     }
     const key = getKey(...args)
-    const cachedValue = await cache.get(key)
+    const cachedValue = await redis.get(key)
     if (cachedValue) {
-      return cachedValue
+      if (autoExtend) {
+        await redis.expire(key, ttl)
+      }
+      const { value } = JSON.parse(cachedValue)
+      return value
     }
     const value = await getValue(...args)
-    await cache.set(key, value)
+    await redis.set(key, JSON.stringify({ value }), 'EX', ttl)
     return value
   }
 
@@ -53,11 +56,14 @@ function createCache<T>({
       return
     }
     const key = getKey(...args)
-    await cache.del(key)
+    await redis.del(key)
   }
 
   const reset = async () => {
-    await cache.reset()
+    const keys = await redis.keys(`cache:${namespace}:*`)
+    await Promise.map(keys, async (k) => {
+      await redis.del(k)
+    })
   }
 
   return { get, del, reset }

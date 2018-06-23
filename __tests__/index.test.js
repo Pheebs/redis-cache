@@ -1,18 +1,15 @@
 /** @flow */
-
-import Redis from 'redis'
+import * as Promise from 'bluebird'
 import createCache from '../src/index'
 
 jasmine.DEFAULT_TIMEOUT_INTERVAL = 20000
-const timeout = (ms) => new Promise((res) => setTimeout(res, ms))
 
 describe('cache', () => {
-  const redis = Redis.createClient(6379, 'redis')
-
   it('check a disabled cache', async () => {
     const mockFunc = jest.fn()
     const disabledCache = createCache({
-      redis,
+      port: 6379,
+      host: 'redis',
       getKey: (a) => a,
       getValue: (key) => {
         mockFunc()
@@ -20,7 +17,8 @@ describe('cache', () => {
       },
       namespace: 'test:disabled',
       enable: false,
-      max: 10,
+      ttl: 1,
+      autoExtend: false,
     })
     await disabledCache.reset()
     const a = 'dis'
@@ -34,7 +32,8 @@ describe('cache', () => {
   it('check an enabled cache', async () => {
     const mockFunc = jest.fn()
     const enabledCache = createCache({
-      redis,
+      port: 6379,
+      host: 'redis',
       getKey: (a) => a,
       getValue: (key) => {
         mockFunc()
@@ -42,7 +41,8 @@ describe('cache', () => {
       },
       namespace: 'test:enable',
       enable: true,
-      max: 10,
+      ttl: 1,
+      autoExtend: false,
     })
     await enabledCache.reset()
     const a = 'en'
@@ -53,10 +53,11 @@ describe('cache', () => {
     expect(mockFunc.mock.calls.length).toBe(2)
   })
 
-  it('check an enabled cache with low capacity', async () => {
+  it('check an enabled cache ttl', async () => {
     const mockFunc = jest.fn()
     const enabledLowCache = createCache({
-      redis,
+      port: 6379,
+      host: 'redis',
       getKey: (a) => a,
       getValue: (key) => {
         mockFunc()
@@ -64,18 +65,39 @@ describe('cache', () => {
       },
       namespace: 'test:enable:low',
       enable: true,
-      max: 2,
+      ttl: 1,
+      autoExtend: false,
     })
     await enabledLowCache.reset()
     const a = 'en:a'
-    const b = 'en:b'
-    const c = 'en:c'
-    await expect(enabledLowCache.get(a)).resolves.toEqual(`${a}`) // inja
-    await expect(enabledLowCache.get(b)).resolves.toEqual(`${b}`) // inja
-    await expect(enabledLowCache.get(c)).resolves.toEqual(`${c}`) // inja
-    await expect(enabledLowCache.get(a)).resolves.toEqual(`${a}`) // inja
-    await timeout(20)
-    await expect(enabledLowCache.get(c)).resolves.toEqual(`${c}`)
-    expect(mockFunc.mock.calls.length).toBe(4)
+    await expect(enabledLowCache.get(a)).resolves.toEqual(`${a}`)
+    await Promise.delay(1000)
+    await expect(enabledLowCache.get(a)).resolves.toEqual(`${a}`)
+    expect(mockFunc.mock.calls.length).toBe(2)
+  })
+
+  it('check an enabled cache ttl with auto extend', async () => {
+    const mockFunc = jest.fn()
+    const enabledLowCache = createCache({
+      port: 6379,
+      host: 'redis',
+      getKey: (a) => a,
+      getValue: (key) => {
+        mockFunc()
+        return `${key}`
+      },
+      namespace: 'test:enable:low',
+      enable: true,
+      ttl: 1,
+      autoExtend: true,
+    })
+    await enabledLowCache.reset()
+    const a = 'en:a'
+    await expect(enabledLowCache.get(a)).resolves.toEqual(`${a}`)
+    await Promise.delay(500)
+    await expect(enabledLowCache.get(a)).resolves.toEqual(`${a}`)
+    await Promise.delay(500)
+    await expect(enabledLowCache.get(a)).resolves.toEqual(`${a}`)
+    expect(mockFunc.mock.calls.length).toBe(1)
   })
 })
