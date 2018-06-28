@@ -14,7 +14,7 @@
   "homepage": "https://github.com/jsynowiec/node-flowtype-boilerplate#readme",
   "engineStrict": true,
   "engines": {
-    "node": ">=8.0"
+    "node": ">=8.9"
   },
   "main": "./dist/src/index.js",
   "devDependencies": {
