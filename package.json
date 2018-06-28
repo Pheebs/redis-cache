@@ -1,5 +1,5 @@
 {
-  "name": "crawler",
+  "name": "redis-cache",
   "version": "1.0.0",
   "description": "Minimalistic boilerplate to quick-start Node.js development in ES6+ (stage-3) with Flowtype checking.",
   "author": "Jakub Synowiec <github@jakubsynowiec.info> (https://jakubsynowiec.info)",
